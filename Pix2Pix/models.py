@@ -7,9 +7,11 @@ def weights_init_normal(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm2d'):
+    elif classname.find('BatchNorm2d') != -1:
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
+    else:
+        pass
 
 
 class UNetDown(nn.Module):
@@ -74,25 +76,25 @@ class GeneratorUNet(nn.Module):
             nn.Tanh(),
         )
 
-        def forward(self, x):
+    def forward(self, x):
             # U-Net generator with skip connections from encoder to decoder
-            d1 = self.down1(x)
-            d2 = self.down2(d1)
-            d3 = self.down3(d2)
-            d4 = self.down4(d3)
-            d5 = self.down5(d4)
-            d6 = self.down6(d5)
-            d7 = self.down7(d6)
-            d8 = self.down8(d7)
-            u1 = self.up1(d8, d7)
-            u2 = self.up2(u1, d6)
-            u3 = self.up3(u2, d5)
-            u4 = self.up4(u3, d4)
-            u5 = self.up5(u4, d3)
-            u6 = self.up6(u5, d2)
-            u7 = self.up7(u6, d1)
+        d1 = self.down1(x)
+        d2 = self.down2(d1)
+        d3 = self.down3(d2)
+        d4 = self.down4(d3)
+        d5 = self.down5(d4)
+        d6 = self.down6(d5)
+        d7 = self.down7(d6)
+        d8 = self.down8(d7)
+        u1 = self.up1(d8, d7)
+        u2 = self.up2(u1, d6)
+        u3 = self.up3(u2, d5)
+        u4 = self.up4(u3, d4)
+        u5 = self.up5(u4, d3)
+        u6 = self.up6(u5, d2)
+        u7 = self.up7(u6, d1)
 
-            return self.final(u7)
+        return self.final(u7)
 
 
 class Discriminator(nn.Module):
@@ -110,11 +112,11 @@ class Discriminator(nn.Module):
             *discriminator_block(in_channels*2, 64, normalization = False),
             *discriminator_block(64, 128),
             *discriminator_block(128, 256),
-            *discriminator_block(256. 512),
+            *discriminator_block(256, 512),
         nn.ZeroPad2d((1, 0, 1, 0)),
         nn.Conv2d(512, 1, 4, padding=1, bias=False)
         )
 
-        def forward(self, img_A, img_B):
-            img_input = torch.cat((img_A, img_B), 1)
-            return self.model(img_input)
+    def forward(self, img_A, img_B):
+        img_input = torch.cat((img_A, img_B), 1)
+        return self.model(img_input)

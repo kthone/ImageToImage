@@ -5,10 +5,12 @@ import math
 import itertools
 import sys
 
-import torchvision.transform as transforms
+import torchvision.transforms as transforms
 from torchvision.utils import save_image
-from torchvision.utils.data import Dataset
+from torch.utils.data import DataLoader
+from torchvision import datasets
 from torch.autograd import Variable
+
 
 from models import *
 from datasets import *
@@ -47,7 +49,7 @@ criterion_pixelwise = torch.nn.L1Loss()
 
 lambda_pixel = 100
 
-patch = (1, opt.img_height //2 ** 4, opt.img_with //2 ** 4)
+patch = (1, opt.img_height // 2 ** 4, opt.img_width // 2 ** 4)
 
 generator = GeneratorUNet()
 discriminator = Discriminator()
@@ -75,20 +77,21 @@ transforms_ = [
 ]
 
 dataloader = DataLoader(
-    ImageDataset('../../data/%s' %opt.dataset_name, transforms = transforms_),
-    batch_size = opt.batch_size,
-    shuffle = True,
-    num_workers = opt.n_cpu
+    ImageDataSet('../data/%s' % opt.dataset_name, transforms_=transforms_),
+    batch_size=opt.batch_size,
+    shuffle=True,
+
 )
 
 val_dataloader = DataLoader(
-    ImageDataset("../../data/%s" % opt.dataset_name, transforms_=transforms_, mode="val"),
+    ImageDataSet("../data/%s" % opt.dataset_name, transforms_=transforms_, mode="val"),
     batch_size=10,
     shuffle=True,
-    num_workers=1,
+
 )
 
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+
 
 def sample_images(batches_done):
     imgs = next(iter(val_dataloader))
@@ -97,6 +100,7 @@ def sample_images(batches_done):
     fake_B = generator(real_A)
     img_sample = torch.cat((real_A.data, fake_B.data, real_B.data), -2)
     save_image(img_sample, "images/%s/%s.png" % (opt.dataset_name, batches_done), nrow=5, normalize=True)
+
 
 for epoch in range(opt.epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
@@ -137,7 +141,6 @@ for epoch in range(opt.epoch, opt.n_epochs):
         batches_left = opt.n_epochs * len(dataloader) - batches_done
         time_left = datetime.timedelta(seconds=batches_left * (time.time() - prev_time))
         prev_time = time.time()
-
 
         sys.stdout.write(
             "\r[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f, pixel: %f, adv: %f] ETA: %s"
