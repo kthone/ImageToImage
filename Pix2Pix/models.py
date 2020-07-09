@@ -1,122 +1,118 @@
-import torch.nn as nn
-import torch.nn.functional as F
-import torch
+import tensorflow as tf
 
 
-def weights_init_normal(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm2d') != -1:
-        torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
-        torch.nn.init.constant_(m.bias.data, 0.0)
-    else:
-        pass
+OUTPUT_CHANNELS = 3
+
+def downsample(filters, size, apply_batchnorm=True):
+    initializer = tf.random_normal_initializer(0., 0.02)
+
+    result = tf.keras.Sequential()
+    result.add(
+      tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',
+                             kernel_initializer=initializer, use_bias=False))
+
+    if apply_batchnorm:
+      result.add(tf.keras.layers.BatchNormalization())
+
+    result.add(tf.keras.layers.LeakyReLU())
+
+    return result
 
 
-class UNetDown(nn.Module):
-    def __init__(self, in_size, out_size, normalize = True, dropout = 0.0):
-        super(UNetDown, self).__init__()
-        layers = [nn.ConvTranspose2d(in_size, out_size, 4, 2, 1, bias = False)]
-        if normalize:
-            layers.append(nn.InstanceNorm2d(out_size))
-        layers.append(nn.LeakyReLU(0.2))
-        if dropout:
-            layers.append(nn.Dropout(dropout))
-        self.model = nn.Sequential(*layers)
+def upsample(filters, size, apply_dropout=False):
+    initializer = tf.random_normal_initializer(0., 0.02)
 
-    def forward(self, x):
-        return self.model(x)
+    result = tf.keras.Sequential()
+    result.add(
+    tf.keras.layers.Conv2DTranspose(filters, size, strides=2,
+                                    padding='same',
+                                    kernel_initializer=initializer,
+                                    use_bias=False))
 
-class UNetUp(nn.Module):
-    def __init__(self, in_size, out_size, dropout = 0.0):
-        super(UNetUp, self).__init__()
-        layers = [
-            nn.ConvTranspose2d(in_size, out_size, 4, 2, 1, bias = False),
-            nn.InstanceNorm2d(out_size),
-            nn.ReLU(inplace = True),
-        ]
+    result.add(tf.keras.layers.BatchNormalization())
 
-        if dropout:
-            layers.append(nn.Dropout(dropout))
+    if apply_dropout:
+        result.add(tf.keras.layers.Dropout(0.5))
 
-        self.model = nn.Sequential(*layers)
+    result.add(tf.keras.layers.ReLU())
 
-    def forward(self, x, skip_input):
-        x = self.model(x)
-        x = torch.cat((x, skip_input), 1)
+    return result
 
-        return x
+def Generator():
+    inputs = tf.keras.layers.Input(shape=[256,256,3])
 
-class GeneratorUNet(nn.Module):
-    def __init__(self, in_channels = 3, out_channels = 3):
-        super(GeneratorUNet, self).__init__()
+    down_stack = [
+      downsample(64, 4, apply_batchnorm=False), # (bs, 128, 128, 64)
+      downsample(128, 4), # (bs, 64, 64, 128)
+      downsample(256, 4), # (bs, 32, 32, 256)
+      downsample(512, 4), # (bs, 16, 16, 512)
+      downsample(512, 4), # (bs, 8, 8, 512)
+      downsample(512, 4), # (bs, 4, 4, 512)
+      downsample(512, 4), # (bs, 2, 2, 512)
+      downsample(512, 4), # (bs, 1, 1, 512)
+    ]
 
-        self.down1 = UNetDown(in_channels, 64, normalize=False)
-        self.down2 = UNetDown(64, 128)
-        self.down3 = UNetDown(128, 256)
-        self.down4 = UNetDown(256, 512, dropout=0.5)
-        self.down5 = UNetDown(512, 512, dropout=0.5)
-        self.down6 = UNetDown(512, 512, dropout=0.5)
-        self.down7 = UNetDown(512, 512, dropout=0.5)
-        self.down8 = UNetDown(512, 512, normalize=False, dropout=0.5)
+    up_stack = [
+      upsample(512, 4, apply_dropout=True), # (bs, 2, 2, 1024)
+      upsample(512, 4, apply_dropout=True), # (bs, 4, 4, 1024)
+      upsample(512, 4, apply_dropout=True), # (bs, 8, 8, 1024)
+      upsample(512, 4), # (bs, 16, 16, 1024)
+      upsample(256, 4), # (bs, 32, 32, 512)
+      upsample(128, 4), # (bs, 64, 64, 256)
+      upsample(64, 4), # (bs, 128, 128, 128)
+    ]
 
-        self.up1 = UNetUp(512, 512, dropout=0.5)
-        self.up2 = UNetUp(1024, 512, dropout=0.5)
-        self.up3 = UNetUp(1024, 512, dropout=0.5)
-        self.up4 = UNetUp(1024, 512, dropout=0.5)
-        self.up5 = UNetUp(1024, 256)
-        self.up6 = UNetUp(512, 128)
-        self.up7 = UNetUp(256, 64)
+    initializer = tf.random_normal_initializer(0., 0.02)
+    last = tf.keras.layers.Conv2DTranspose(OUTPUT_CHANNELS, 4,
+                                         strides=2,
+                                         padding='same',
+                                         kernel_initializer=initializer,
+                                         activation='tanh') # (bs, 256, 256, 3)
 
-        self.final = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            nn.ZeroPad2d((1, 0, 1, 0)),
-            nn.Conv2d(128, out_channels, 4, padding=1),
-            nn.Tanh(),
-        )
+    x = inputs
 
-    def forward(self, x):
-            # U-Net generator with skip connections from encoder to decoder
-        d1 = self.down1(x)
-        d2 = self.down2(d1)
-        d3 = self.down3(d2)
-        d4 = self.down4(d3)
-        d5 = self.down5(d4)
-        d6 = self.down6(d5)
-        d7 = self.down7(d6)
-        d8 = self.down8(d7)
-        u1 = self.up1(d8, d7)
-        u2 = self.up2(u1, d6)
-        u3 = self.up3(u2, d5)
-        u4 = self.up4(u3, d4)
-        u5 = self.up5(u4, d3)
-        u6 = self.up6(u5, d2)
-        u7 = self.up7(u6, d1)
+  # Downsampling through the model
+    skips = []
+    for down in down_stack:
+        x = down(x)
+        skips.append(x)
 
-        return self.final(u7)
+    skips = reversed(skips[:-1])
+
+  # Upsampling and establishing the skip connections
+    for up, skip in zip(up_stack, skips):
+        x = up(x)
+        x = tf.keras.layers.Concatenate()([x, skip])
+
+    x = last(x)
+
+    return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-class Discriminator(nn.Module):
-    def __init__(self, in_channels = 3):
-        super(Discriminator, self).__init__()
+def Discriminator():
+    initializer = tf.random_normal_initializer(0., 0.02)
 
-        def discriminator_block(in_filters, out_filters, normalization = True):
-            layers = [nn.Conv2d(in_filters, out_filters, 4, stride = 2, padding = 1)]
-            if normalization:
-                layers.append(nn.InstanceNorm2d(out_filters))
-            layers.append(nn.LeakyReLU(0.2 , inplace = True))
-            return layers
+    inp = tf.keras.layers.Input(shape=[256, 256, 3], name='input_image')
+    tar = tf.keras.layers.Input(shape=[256, 256, 3], name='target_image')
 
-        self.model = nn.Sequential(
-            *discriminator_block(in_channels*2, 64, normalization = False),
-            *discriminator_block(64, 128),
-            *discriminator_block(128, 256),
-            *discriminator_block(256, 512),
-        nn.ZeroPad2d((1, 0, 1, 0)),
-        nn.Conv2d(512, 1, 4, padding=1, bias=False)
-        )
+    x = tf.keras.layers.concatenate([inp, tar]) # (bs, 256, 256, channels*2)
 
-    def forward(self, img_A, img_B):
-        img_input = torch.cat((img_A, img_B), 1)
-        return self.model(img_input)
+    down1 = downsample(64, 4, False)(x) # (bs, 128, 128, 64)
+    down2 = downsample(128, 4)(down1) # (bs, 64, 64, 128)
+    down3 = downsample(256, 4)(down2) # (bs, 32, 32, 256)
+
+    zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3) # (bs, 34, 34, 256)
+    conv = tf.keras.layers.Conv2D(512, 4, strides=1,
+                                kernel_initializer=initializer,
+                                use_bias=False)(zero_pad1) # (bs, 31, 31, 512)
+
+    batchnorm1 = tf.keras.layers.BatchNormalization()(conv)
+
+    leaky_relu = tf.keras.layers.LeakyReLU()(batchnorm1)
+
+    zero_pad2 = tf.keras.layers.ZeroPadding2D()(leaky_relu) # (bs, 33, 33, 512)
+
+    last = tf.keras.layers.Conv2D(1, 4, strides=1,
+                                kernel_initializer=initializer)(zero_pad2) # (bs, 30, 30, 1)
+
+    return tf.keras.Model(inputs=[inp, tar], outputs=last)

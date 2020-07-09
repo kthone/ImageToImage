@@ -1,36 +1,55 @@
-import glob
-import random
+import tensorflow as tf
 import os
-import numpy as np
-
-from torch.utils.data import Dataset
-from PIL import Image
-import torchvision.transforms as transforms
 
 
-class ImageDataSet(Dataset):
-    def __init__(self, root, transforms_ = None, mode = 'train'):
-        self.transform = transforms.Compose(transforms_)
 
-        self.files = sorted(glob.glob(os.path.join(root, mode) +'/*.*'))
-        if mode == 'train':
-            self.files.extend(sorted(glob.glob(os.path.join(root, "test") + "/*.*")))
+def load(image_file):
+    image = tf.io.read_file(image_file)
+    image = tf.image.decode_jpeg(image)
 
-    def __getitem__(self, index):
+    w = tf.shape(image)[1]
 
-        img = Image.open(self.files[index % len(self.files)])
-        w, h = img.size
-        img_A = img.crop((0, 0, w / 2, h))
-        img_B = img.crop((w / 2, 0, w, h))
+    w = w // 2
+    real_image = image[:, :w, :]
+    input_image = image[:, w:, :]
 
-        if np.random.random() < 0.5 :
-            img_A = Image.fromarray(np.array(img_A)[:, ::-1, :], "RGB")
-            img_B = Image.fromarray(np.array(img_B)[:, ::-1, :], "RGB")
+    input_image = tf.cast(input_image, tf.float32)
+    real_image = tf.cast(real_image, tf.float32)
 
-        img_A = self.transform(img_A)
-        img_B = self.transform(img_B)
+    return input_image, real_image
 
-        return {"A": img_A, "B": img_B}
+def resize(input_image, real_image, height, width):
+    input_image = tf.image.resize(input_image, [height, width],
+                                method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+    real_image = tf.image.resize(real_image, [height, width],
+                               method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
 
-    def __len__(self):
-        return len(self.files)
+    return input_image, real_image
+
+
+def random_crop(input_image, real_image, IMG_HEIGHT, IMG_WIDTH):
+    stacked_image = tf.stack([input_image, real_image], axis=0)
+    cropped_image = tf.image.random_crop(
+    stacked_image, size=[2, IMG_HEIGHT, IMG_WIDTH, 3])
+
+    return cropped_image[0], cropped_image[1]
+
+
+def normalize(input_image, real_image):
+    input_image = (input_image / 127.5) - 1
+    real_image = (real_image / 127.5) - 1
+
+    return input_image, real_image
+
+
+def random_jitter(input_image, real_image, IMG_HEIGHT, IMG_WIDTH):
+
+    input_image, real_image = resize(input_image, real_image, 286, 286)
+    input_image, real_image = random_crop(input_image, real_image, IMG_HEIGHT, IMG_WIDTH)
+
+    if tf.random.uniform(()) > 0.5:
+        input_image = tf.image.flip_left_right(input_image)
+        real_image = tf.image.flip_left_right(real_image)
+
+    return input_image, real_image
+
