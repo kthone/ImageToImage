@@ -3,6 +3,8 @@ import os
 import numpy as np
 import math
 import itertools
+import time
+import datetime
 import sys
 
 import torchvision.transforms as transforms
@@ -109,19 +111,8 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         valid = Variable(Tensor(np.ones((real_A.size(0), *patch))), requires_grad=False)
         fake = Variable(Tensor(np.zeros((real_A.size(0), *patch))), requires_grad=False)
-
-        optimizer_G.zero_grad()
-
         fake_B = generator(real_A)
-        pred_fake = discriminator(fake_B, real_A)
-        loss_GAN = criterion_GAN(pred_fake, valid)
-        loss_pixel = criterion_pixelwise(fake_B, real_B)
 
-        loss_G = loss_GAN + lambda_pixel * loss_pixel
-
-        loss_G.backward()
-
-        optimizer_G.step()
 
         optimizer_D.zero_grad()
 
@@ -136,6 +127,18 @@ for epoch in range(opt.epoch, opt.n_epochs):
 
         loss_D.backward()
         optimizer_D.step()
+
+        optimizer_G.zero_grad()
+
+        pred_fake = discriminator(fake_B, real_A)
+        loss_GAN = criterion_GAN(pred_fake, valid)
+        loss_pixel = criterion_pixelwise(fake_B, real_B)
+
+        loss_G = loss_GAN + lambda_pixel * loss_pixel
+
+        loss_G.backward()
+
+        optimizer_G.step()
 
         batches_done = epoch * len(dataloader) + i
         batches_left = opt.n_epochs * len(dataloader) - batches_done
