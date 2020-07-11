@@ -39,7 +39,7 @@ print(opt)
 
 _URL = 'https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/%s.tar.gz' %opt.dataset_name
 
-path_to_zip = tf.keras.utils.get_file('%s.tar.gz' % opt.dataset_name,                                     origin=_URL,
+path_to_zip = tf.keras.utils.get_file('%s.tar.gz' % opt.dataset_name,  origin=_URL,
                                       extract=True)
 
 PATH = os.path.join(os.path.dirname(path_to_zip), '%s/' %opt.dataset_name)

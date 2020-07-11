@@ -6,17 +6,9 @@ import os
 def load(image_file):
     image = tf.io.read_file(image_file)
     image = tf.image.decode_jpeg(image)
+    image = tf.cast(image, tf.float32)
 
-    w = tf.shape(image)[1]
-
-    w = w // 2
-    real_image = image[:, :w, :]
-    input_image = image[:, w:, :]
-
-    input_image = tf.cast(input_image, tf.float32)
-    real_image = tf.cast(real_image, tf.float32)
-
-    return input_image, real_image
+    return image
 
 def resize(input_image, real_image, height, width):
     input_image = tf.image.resize(input_image, [height, width],
