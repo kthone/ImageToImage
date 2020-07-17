@@ -149,7 +149,6 @@ def sample_images(batches_done):
 
 valid = 1
 fake = 0
-
 prev_time = time.time()
 for epoch in range(opt.epoch, opt.n_epochs):
     for i, batch in enumerate(dataloader):
