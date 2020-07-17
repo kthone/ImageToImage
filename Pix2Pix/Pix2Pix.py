@@ -43,6 +43,7 @@ path_to_zip = tf.keras.utils.get_file('%s.tar.gz' % opt.dataset_name,  origin=_U
                                       extract=True)
 
 PATH = os.path.join(os.path.dirname(path_to_zip), '%s/' %opt.dataset_name)
+os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
 
 def load_image_train(image_file):
     input_image, real_image = load(image_file)
@@ -111,7 +112,7 @@ log_dir="logs/"
 summary_writer = tf.summary.create_file_writer(
   log_dir + "fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-def generate_images(model, test_input, tar):
+def generate_images(model, test_input, tar, epoch):
     prediction = model(test_input, training=True)
     plt.figure(figsize=(15,15))
 
@@ -124,7 +125,7 @@ def generate_images(model, test_input, tar):
         # getting the pixel values between [0, 1] to plot it.
         plt.imshow(display_list[i] * 0.5 + 0.5)
         plt.axis('off')
-    plt.show()
+    plt.savefig('images/%s/%d.png' %(opt.dataset_name, epoch)
 
 @tf.function
 def train_step(input_image, target, epoch):
@@ -159,7 +160,7 @@ def fit(train_ds, epochs, test_ds):
 
 
         for example_input, example_target in test_ds.take(1):
-            generate_images(generator, example_input, example_target)
+            generate_images(generator, example_input, example_target, epoch)
         print("Epoch: ", epoch)
 
     # Train
@@ -178,4 +179,4 @@ def fit(train_ds, epochs, test_ds):
                                                         time.time()-start))
     checkpoint.save(file_prefix = checkpoint_prefix)
 
-fit(train_dataset, EPOCHS, test_dataset)
+fit(train_dataset, opt.n_epochs, test_dataset)
