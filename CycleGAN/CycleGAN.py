@@ -34,6 +34,7 @@ parser.add_argument("--lambda_id", type=float, default=5.0, help="identity loss 
 parser.add_argument("--buffer_size", type=int, default=1000, help="number of buffer")
 opt = parser.parse_args()
 print(opt)
+os.makedirs("images/%s" % opt.dataset_name, exist_ok=True)
 
 _URL = 'https://people.eecs.berkeley.edu/~taesung_park/CycleGAN/datasets/%s.zip' %opt.dataset_name
 path_to_zip = tf.keras.utils.get_file('%s.zip' %opt.dataset_name,origin = _URL, extract = True)
@@ -130,7 +131,7 @@ if ckpt_manager.latest_checkpoint:
     print ('Latest checkpoint restored!!')
 
 
-def generate_images(model, test_input):
+def generate_images(model, test_input, epoch):
     prediction = model(test_input)
 
     plt.figure(figsize=(12, 12))
@@ -144,7 +145,7 @@ def generate_images(model, test_input):
         # getting the pixel values between [0, 1] to plot it.
         plt.imshow(display_list[i] * 0.5 + 0.5)
         plt.axis('off')
-    plt.show()
+    plt.savefig('images/%s/%d.png' %(opt.dataset_name, epoch)
 
 
 @tf.function
@@ -216,7 +217,7 @@ for epoch in range(opt.n_epochs):
         if n%10 == 0:
             print('.', end = '')
         n += 1
-    generate_images(generator_g, sample_train_A)
+    generate_images(generator_g, sample_train_A,epoch)
     if (epoch + 1) % 5 == 0:
         ckpt_save_path = ckpt_manager.save()
         print('Saving checkpoint for epoch {} at {}'.format(epoch + 1,
