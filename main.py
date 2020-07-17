@@ -5,7 +5,6 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument("model", type=str, default='pix2pix', help="model to learn")
 parser.add_argument("dataset_name", type=str, default='facades', help="number of epochs of training")
-parser.add_argument('mode', type = str, default= 'train', help = 'train or test')
 opt = parser.parse_args()
 
 PATH = '%s' %opt.model
